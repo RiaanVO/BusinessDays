@@ -15,7 +15,7 @@ Algorithm design and manual testing was completed using an excel file (BusinessD
 
 ## Usage
 1. Run the API project with the enviroment variable ```ASPNETCORE_ENVIRONMENT=Development``` 
-2. Navigate to https://localhost:5001/api/businessdays?start=2020-06-20&end=2020-06-25 to view the response or use postman
+2. Navigate to http://localhost:5000/api/businessdays?start=2020-06-20&end=2020-06-25 to view the response or use postman
 
 The API uses a query string to read the start and end dates used for the period and take in values in the format of YYYY-MM-DD
 
