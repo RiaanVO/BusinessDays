@@ -1,0 +1,4 @@
+HolidayType,Day,DayOfWeek,OccurrenceInMonth,Month
+ShiftingDay,26,,,1
+FixedDate,25,,,4
+OccurrenceDay,,1,2,6
