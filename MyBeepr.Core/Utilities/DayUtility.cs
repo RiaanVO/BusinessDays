@@ -1,62 +1,69 @@
 using System;
+using System.Linq;
 using MyBeepr.Core.Models;
 
 namespace MyBeepr.Core.Utilities
 {
     public static class DayUtility
     {
+        /// <summary>
+        /// Function designed to return the number of working weekdays using a single pass calculation
+        /// </summary>
+        /// <param name="start">The starting date of the period</param>
+        /// <param name="end">The ending date of the period</param>
+        /// <returns>The number of working weekdays within the period as an int</returns>
         public static int CalcWorkingDaysBetween(DateTime start, DateTime end) {
-            // Shift end date back one to align the between
             var fullPeriod = end.Subtract(start);
-            var workingDays = 0;
+            
+            // If the period is small, use a simple linear algorithm to extract working days
+            if (fullPeriod.TotalDays < 7)
+            {
+                return CalcWorkingDaysBetweenLinear(start, end);
+            }
+            
+            // Use constant time algorithm for large date ranges 
+            return CalcWorkingDaysBetweenConstant(start, end);
+        }
 
-            // Return if they are the same day or following days
-            if (fullPeriod.Days < 2) return workingDays;
-
-            var shiftedStart = start.AddDays(1);
+        private static int CalcWorkingDaysBetweenConstant(DateTime start, DateTime end)
+        {
             var shiftedEnd = end.AddDays(-1);
-			
-            var startDow = (int) start.DayOfWeek + 1;
-			
-            var shiftedStartDow = (int) shiftedStart.DayOfWeek + 1;
-            var shiftedEndDow = (int) shiftedEnd.DayOfWeek + 1;
-			
-            var dayBetweenExact = shiftedEnd.Subtract(shiftedStart).Days + 1;
+            var dayBetweenExact = shiftedEnd.Subtract(start.AddDays(1)).Days + 1;
+                
+            // Grab the days left and days progressed in the week
+            var startDaysLeftInWeek = 7 - ((int) start.DayOfWeek + 1);
+            var endDaysProgressedInWeek = (int) shiftedEnd.DayOfWeek + 1;
 
-            if (fullPeriod.Days < 7)
-            {
-                workingDays = dayBetweenExact;
+            // Calculate the number of full weeks in between the start and end period (removing the ends to get exact weeks)
+            var weeksBetween = (dayBetweenExact - startDaysLeftInWeek - endDaysProgressedInWeek) / 7;
 
-                // Force the DOW to work over a 2 week period if it crosses a weekend
-                var repositionedEnd = shiftedEndDow + (shiftedStartDow <= shiftedEndDow ? 0 : 7);
-				
-                // Check if a boundary falls on a saturday or sunday
-                if (shiftedStartDow == 1 || repositionedEnd == 1 || repositionedEnd == 8) workingDays -= 1;
-                if (shiftedStartDow == 7 || repositionedEnd == 7 || repositionedEnd == 14) workingDays -= 1;
-				
-                // Check if the period includes a saturday or sunday
-                if (8 < repositionedEnd && 8 > shiftedStartDow) workingDays -= 1;
-                if (7 < repositionedEnd && 7 > shiftedStartDow) workingDays -= 1;
-            }
-            else
-            {
-                // Grab the days left and days progressed in the week
-                var startDliw = 7 - startDow;
-                var endDpiw = shiftedEndDow;
-
-                var weeksBetween = (dayBetweenExact - startDliw - endDpiw) / 7;
-                workingDays = (weeksBetween * 5) + startDliw + endDpiw;
-				
-                // remove weekend days from the start week
-                if (startDliw > 0) workingDays -= 1;
-                if (startDliw == 7) workingDays -= 1;
-
-                // remove weekend days from the end week
-                if (endDpiw > 0) workingDays -= 1;
-                if (endDpiw == 7) workingDays -= 1;
-            }
-
-            return workingDays;
+            // Conditionally remove saturday and sunday from the edge weeks
+            var workingDaysAtStart = startDaysLeftInWeek 
+                                     - (startDaysLeftInWeek > 0 ? 1 : 0)
+                                     - (startDaysLeftInWeek == 7 ? 1 : 0);
+            
+            var workingDaysAtEnd = endDaysProgressedInWeek 
+                                     - (endDaysProgressedInWeek > 0 ? 1 : 0)
+                                     - (endDaysProgressedInWeek == 7 ? 1 : 0);
+            
+            return (weeksBetween * 5) + workingDaysAtStart + workingDaysAtEnd;
+        }
+        
+        /// <summary>
+        /// Function designed to return the number of working weekdays using a linq expression
+        /// Linear time algorithm that should be used for small date ranges
+        /// </summary>
+        /// <param name="start">The starting date of the period</param>
+        /// <param name="end">The ending date of the period</param>
+        /// <returns>The number of working weekdays within the period as an int</returns>
+        public static int CalcWorkingDaysBetweenLinear(DateTime start, DateTime end) {
+            var dayDifference = (int)end.AddDays(-1).Subtract(start).TotalDays;
+            
+            // Loop through the period and conditionally add the working days
+            return Enumerable
+                .Range(1, dayDifference >=0 ? dayDifference : 0)
+                .Select(x => start.AddDays(x))
+                .Count(x => x.DayOfWeek != DayOfWeek.Saturday && x.DayOfWeek != DayOfWeek.Sunday);
         }
 
         private static bool OnWeekday(DateTime date)
@@ -64,13 +71,28 @@ namespace MyBeepr.Core.Utilities
             return (int) date.DayOfWeek > 0 && (int) date.DayOfWeek < 6;
         }
 
-        public static bool fixedOnInPeriodWorkingDay(Holiday holiday, DateTime start, DateTime end, int year)
+        public static int HolidayOverlapsWorkingDay(Holiday holiday, DateTime start, DateTime end, int year)
+        {
+            switch (holiday.HolidayType)
+            {
+                case EHolidayType.FixedDate:
+                    return fixedOnInPeriodWorkingDay(holiday, start, end, year);
+                case EHolidayType.ShiftingDay:
+                    return shiftingOnInPeriodWorkingDay(holiday, start, end, year);
+                case EHolidayType.OccurrenceDay:
+                    return occurrenceOnInPeriodWorkingDay(holiday, start, end, year);
+                default:
+                    return 0;
+            }
+        }
+
+        private static int fixedOnInPeriodWorkingDay(Holiday holiday, DateTime start, DateTime end, int year)
         {
             var holidayDate = new DateTime(year, holiday.Month, holiday.Day ?? 0);
-            return holidayDate > start && holidayDate < end && OnWeekday(holidayDate);
+            return holidayDate > start && holidayDate < end && OnWeekday(holidayDate) ? 1 : 0;
         }
         
-        public static bool shiftingOnInPeriodWorkingDay(Holiday holiday, DateTime start, DateTime end, int year)
+        private static int shiftingOnInPeriodWorkingDay(Holiday holiday, DateTime start, DateTime end, int year)
         {
             var holidayDate = new DateTime(year, holiday.Month, holiday.Day ?? 0);
             switch ((int)holidayDate.DayOfWeek)
@@ -83,10 +105,10 @@ namespace MyBeepr.Core.Utilities
                     break;
             }
 
-            return holidayDate > start && holidayDate < end && OnWeekday(holidayDate);
+            return holidayDate > start && holidayDate < end && OnWeekday(holidayDate) ? 1 : 0;
         }
 
-        public static bool occurrenceOnInPeriodWorkingDay(Holiday holiday, DateTime start, DateTime end, int year)
+        private static int occurrenceOnInPeriodWorkingDay(Holiday holiday, DateTime start, DateTime end, int year)
         {
             var holidayDate = new DateTime(year, holiday.Month, 1);
             var currentDayOfWeek = (int)holidayDate.DayOfWeek;
@@ -105,7 +127,7 @@ namespace MyBeepr.Core.Utilities
             // Shift the date to the desired day in the month
             holidayDate = holidayDate.AddDays(7 * ((holiday.OccurrenceInMonth ?? 1) - 1));
 
-            return holidayDate > start && holidayDate < end && OnWeekday(holidayDate);
+            return holidayDate > start && holidayDate < end && OnWeekday(holidayDate) ? 1 : 0;
         }
     }
 }

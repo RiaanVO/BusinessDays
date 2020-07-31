@@ -22,30 +22,15 @@ namespace MyBeepr.Services
         {
             var holidays = await _holidayRepository.ListAsync();
 
-            var workingDays = DayUtility.CalcWorkingDaysBetween(startDate, endDate);
+            // var workingDays = DayUtility.CalcWorkingDaysBetween(startDate, endDate);
+            var workingDays = DayUtility.CalcWorkingDaysBetweenLinear(startDate, endDate);
 			
             for (var year = startDate.Year; year <= endDate.Year; year++)
             {
-                foreach (var holiday in holidays)
-                {
-                    switch (holiday.HolidayType)
-                    {
-                        case EHolidayType.FixedDate:
-                            if(DayUtility.fixedOnInPeriodWorkingDay(holiday, startDate, endDate, year)) workingDays -= 1;
-                            break;
-                        case EHolidayType.ShiftingDay: 
-                            if(DayUtility.shiftingOnInPeriodWorkingDay(holiday, startDate, endDate, year)) workingDays -= 1;
-                            break;
-                        case EHolidayType.OccurrenceDay: 
-                            if(DayUtility.occurrenceOnInPeriodWorkingDay(holiday, startDate, endDate, year)) workingDays -= 1;
-                            break;
-                    }
-                }
+                workingDays = holidays.Aggregate(workingDays, (current, holiday) => current - DayUtility.HolidayOverlapsWorkingDay(holiday, startDate, endDate, year));
             }
 
             return workingDays;
         }
-
-
     }
 }

@@ -9,6 +9,8 @@ namespace MyBeepr.Tests.Utilities
     {
         private static object[] _dateTestCases =
         {
+            new object[] { new DateTime(1014, 8, 7), new DateTime(2014, 8, 11), 260890}, // long duration test 1000 years
+
             new object[] { new DateTime(2014, 8, 7), new DateTime(2014, 8, 11), 1}, // provided test case 1
             new object[] { new DateTime(2014, 8, 13), new DateTime(2014, 8, 21), 5}, // provided test case 2
             
@@ -36,6 +38,13 @@ namespace MyBeepr.Tests.Utilities
         public void CalcWorkingDaysBetweenTests(DateTime startDate, DateTime endDate, long workingDays)
         {
             var result = DayUtility.CalcWorkingDaysBetween(startDate, endDate);
+            Assert.AreEqual(workingDays, result);
+        }
+        
+        [TestCaseSource(nameof(_dateTestCases))]
+        public void CalcWorkingDaysBetweenLinearTests(DateTime startDate, DateTime endDate, long workingDays)
+        {
+            var result = DayUtility.CalcWorkingDaysBetweenLinear(startDate, endDate);
             Assert.AreEqual(workingDays, result);
         }
     }
